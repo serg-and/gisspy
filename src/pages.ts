@@ -12,11 +12,15 @@ export type Promisable<T> = T | Promise<T>;
 
 type RedirectRes = { notFound: true } | { redirect: Redirect };
 
-export type Layer<Ctx, D, P> = (context: {
+export type Layer<
+  Ctx extends GetServerSidePropsContext | GetStaticPropsContext,
+  D,
+  P
+> = (context: {
   ctx: Ctx;
   data: D;
   props: P;
-}) => Promisable<RedirectRes | { data?: object; props?: object }>;
+}) => Promisable<RedirectRes | { data?: object; props?: object } | void>;
 
 type LayerRes<T extends Layer<any, any, any>> = Exclude<
   Awaited<ReturnType<T>>,
@@ -58,6 +62,13 @@ type GetResult<
   ? GetServerSidePropsResult<P>
   : GetStaticPropsResult<P>;
 
+type PropsOut<T extends GetResult<any>, LayersProps extends object> = Exclude<
+  Awaited<T>,
+  RedirectRes
+> extends Promisable<{ props: infer InnerProps }>
+  ? LayersProps & Awaited<InnerProps>
+  : LayersProps;
+
 class PageMiddlewareFactory<
   T extends MiddlewareType,
   D extends object = {},
@@ -69,6 +80,7 @@ class PageMiddlewareFactory<
     this.layers = layers ?? [];
   }
 
+  /** Add a new layer to the current middleware */
   public use<L extends Layer<GetContext<T>, D, P>>(layer: L) {
     type Data = LayerData<L>;
     type NewData = Data extends never ? D : Data & Omit<D, keyof Data>;
@@ -82,20 +94,69 @@ class PageMiddlewareFactory<
     ]);
   }
 
-  public handler<Props extends { [key: string]: any } = { [key: string]: any }>(
+  /**
+   * Create a handler using the current middleware.
+   * Handler callback may be left empty, middleware will in that case only run its layers.
+   */
+  public handler<InnerRes extends GetResult<T>>(
     fn?: (context: {
       ctx: GetContext<T>;
       data: D;
       props: P;
-    }) => Promisable<GetResult<T, Props>>
-  ): GetType<T, P & Props> {
+    }) => Promisable<InnerRes>
+  ): GetType<T, PropsOut<InnerRes, P>> {
     return (async (ctx: GetContext<T>) => {
+      // const data = {};
+      // const props = {};
+
+      // const stack = this.layers.toReversed();
+
+      // const nextFn: NextFn<T> = async (opts) => {
+      //   if (opts !== undefined) {
+      //     if ("notFound" in opts || "redirect" in opts)
+      //       return Object.assign(opts, __marker);
+
+      //     if (opts.data) Object.assign(data, opts.data);
+      //     if (opts.props) Object.assign(props, opts.props);
+      //   }
+
+      //   const nextLayer = stack.pop();
+
+      //   if (nextLayer) {
+      //     return await nextLayer(
+      //       {
+      //         ctx,
+      //         data,
+      //         // @ts-expect-error mixed generics
+      //         props,
+      //       },
+      //       nextFn
+      //     );
+      //   } else {
+      //     // depleted stack, run handler
+      //     if (fn) {
+      //       const res = await fn({ ctx, data: data as D, props: props as P });
+      //       if ("notFound" in res || "redirect" in res)
+      //         return Object.assign(res, __marker);
+
+      //       Object.assign(props, await res.props);
+      //     }
+      //     return { props, __marker: __marker.__marker };
+      //   }
+      // };
+
+      // const result = await nextFn();
+      // if ("notFound" in result) return result.notFound;
+      // if ("redirect" in result) return result.redirect;
+      // return { props: result.props };
+
       const data = {};
       const props = {};
 
       for (const layer of this.layers) {
         // @ts-expect-error mixed generics
         const res = await layer({ ctx, data, props });
+        if (res === undefined) continue;
         if ("notFound" in res || "redirect" in res) return res;
 
         if (res.data) Object.assign(data, res.data);
@@ -109,8 +170,8 @@ class PageMiddlewareFactory<
         Object.assign(props, await res.props);
       }
 
-      return { props: props as P & Props };
-    }) as GetType<T, P & Props>;
+      return { props: props as PropsOut<InnerRes, P> };
+    }) as GetType<T, PropsOut<InnerRes, P>>;
   }
 }
 
@@ -123,6 +184,10 @@ export type StaticMiddlewareFactory<
   D extends object = {},
   P extends object = {}
 > = PageMiddlewareFactory<"StaticProps", D, P>;
+
+type ResProps<T extends GetServerSideProps | GetStaticProps> = Awaited<
+  Exclude<Awaited<ReturnType<T>>, RedirectRes>["props"]
+>;
 
 /**
  * Infers to props returned from a middleware handler
@@ -137,9 +202,8 @@ export type StaticMiddlewareFactory<
  * );
  * ```
  */
-export type InferProps<T extends GetServerSideProps | GetStaticProps> = Awaited<
-  Extract<Awaited<ReturnType<T>>, { props: any }>["props"]
->;
+export type InferProps<T extends GetServerSideProps | GetStaticProps> =
+  ResProps<T> extends {} ? ResProps<T> : {};
 
 /**
  * Create new middleware for {@link GetServerSideProps}
@@ -224,7 +288,6 @@ export const serverLayer = <T extends Layer<GetServerSidePropsContext, {}, {}>>(
  * const reusableLayer = serverLayerWithContext<{ client: string }>()(
  *   ({ data }) => {
  *     if (data.client === "test") return { notFound: true };
- *     return { data: {} };
  *   }
  * );
  *
@@ -335,7 +398,6 @@ export const staticLayer = <T extends Layer<GetStaticPropsContext, {}, {}>>(
  * const reusableLayer = staticLayerWithContext<{ client: string }>()(
  *   ({ data }) => {
  *     if (data.client === "test") return { notFound: true };
- *     return { data: {} };
  *   }
  * );
  *

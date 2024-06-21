@@ -1,7 +1,32 @@
 {
   "name": "gisspy",
+  "version": "0.1.1",
   "module": "index.ts",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "LICENSE",
+    "package.json",
+    "README.md"
+  ],
+  "license": "MIT",
+  "description": "Type safe, composable and reusable middleware for Next.js routes",
+  "author": "https://github.com/serg-and",
+  "keywords": [
+    "next",
+    "next.js",
+    "middleware"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/serg-and/gisspy.git"
+  },
+  "bugs": {
+    "url": "https://github.com/serg-and/gisspy/issues"
+  },
+  "homepage": "https://github.com/serg-and/gisspy#readme",
   "scripts": {
     "build": "rm -rf ./dist/* && npx tsc && bun build src/index.ts --minify --outdir dist"
   },

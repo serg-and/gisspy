@@ -36,6 +36,14 @@ describe("`notFound` always passes through", () => {
 
     expect("notFound" in res && res.notFound === true).toBeTrue();
   });
+
+  test("empty handler", async () => {
+    const res = await serverMiddleware()
+      .use(() => ({ notFound: true }))
+      .handler()(mockServerCtx());
+
+    expect("notFound" in res && res.notFound === true).toBeTrue();
+  });
 });
 
 describe("`Redirect` always passes through", () => {
@@ -81,6 +89,17 @@ describe("`Redirect` always passes through", () => {
         props: { shouldNot: "be here" },
         redirect,
       }))(mockServerCtx());
+
+    expect("redirect" in res).toBeTrue();
+    expect("redirect" in res ? res.redirect : undefined).toStrictEqual(
+      redirect
+    );
+  });
+
+  test("empty handler", async () => {
+    const res = await serverMiddleware()
+      .use(() => ({ redirect }))
+      .handler()(mockServerCtx());
 
     expect("redirect" in res).toBeTrue();
     expect("redirect" in res ? res.redirect : undefined).toStrictEqual(
@@ -212,6 +231,14 @@ describe("Merge `props` between layers", () => {
       a: "a2",
       b: "b",
     });
+  });
+
+  test("handler without function correctly returns props", async () => {
+    const res = await serverMiddleware()
+      .use(() => ({ props: { a: "a" } }))
+      .handler()(mockServerCtx());
+
+    expect("props" in res ? await res.props : {}).toStrictEqual({ a: "a" });
   });
 });
 

@@ -1,60 +1,29 @@
 import { type Promisable } from "./pages";
 import type { NextApiRequest, NextApiHandler, NextApiResponse } from "next";
-
-type StopRes = { stop: true };
-
+type StopRes = {
+    stop: true;
+};
 export type ApiLayer<D, ResponseData = any> = (context: {
-  req: NextApiRequest;
-  res: NextApiResponse<ResponseData>;
-  data: D;
-}) => Promisable<{ data: object } | StopRes | void>;
-
-type ApiLayerRes<T extends ApiLayer<any>> = Awaited<ReturnType<T>>;
-
-class ApiMiddlewareFactory<D extends object> {
-  private layers: ApiLayer<D>[];
-
-  constructor(layers?: ApiLayer<D>[]) {
-    this.layers = layers ?? [];
-  }
-
-  /** Add a new layer to the current middleware */
-  public use<L extends ApiLayer<D>>(layer: L) {
-    type NewData = ApiLayerRes<L> extends void | undefined
-      ? D
-      : ApiLayerRes<L> extends { data?: infer R }
-      ? R extends object
-        ? R & Omit<D, keyof R>
-        : D
-      : D;
-
-    return new ApiMiddlewareFactory<NewData>([...this.layers, layer]);
-  }
-
-  /** Create an API route handler with the current middleware */
-  public handler<ResponseData = any>(
-    fn: (context: {
-      req: NextApiRequest;
-      res: NextApiResponse<ResponseData>;
-      data: D;
-    }) => Promisable<unknown>
-  ): NextApiHandler<ResponseData> {
-    return async (req: NextApiRequest, res: NextApiResponse<ResponseData>) => {
-      const data = {} as D;
-
-      for (const layer of this.layers) {
-        const result = await layer({ req, res, data: data as D });
-        if (result === undefined) continue;
-        if ("stop" in result && result.stop) return;
-
-        if ("data" in result) Object.assign(data, result.data);
-      }
-
-      return await fn({ req, res, data: data as D });
-    };
-  }
+    req: NextApiRequest;
+    res: NextApiResponse<ResponseData>;
+    data: D;
+}) => Promisable<{
+    data: object;
+} | StopRes | void>;
+declare class ApiMiddlewareFactory<D extends object> {
+    private layers;
+    constructor(layers?: ApiLayer<D>[]);
+    /** Add a new layer to the current middleware */
+    use<L extends ApiLayer<D>>(layer: L): ApiMiddlewareFactory<Awaited<ReturnType<L>> extends void | undefined ? D : Awaited<ReturnType<L>> extends {
+        data?: infer R | undefined;
+    } ? R extends object ? R & Omit<D, keyof R> : D : D>;
+    /** Create an API route handler with the current middleware */
+    handler<ResponseData = any>(fn: (context: {
+        req: NextApiRequest;
+        res: NextApiResponse<ResponseData>;
+        data: D;
+    }) => Promisable<unknown>): NextApiHandler<ResponseData>;
 }
-
 /**
  * Create middleware for an API handler. Handler can be exported as default to create an API handler.
  *
@@ -111,8 +80,7 @@ class ApiMiddlewareFactory<D extends object> {
  *   });
  *  ```
  */
-export const apiMiddleware = () => new ApiMiddlewareFactory<{}>();
-
+export declare const apiMiddleware: () => ApiMiddlewareFactory<{}>;
 /**
  * Create a reusable middleware layer
  *
@@ -126,8 +94,7 @@ export const apiMiddleware = () => new ApiMiddlewareFactory<{}>();
  *
  * ```
  */
-export const apiLayer = <T extends ApiLayer<{}>>(layer: T): T => layer;
-
+export declare const apiLayer: <T extends ApiLayer<{}, any>>(layer: T) => T;
 /**
  * Similar to {@link apiLayer}, but with the option for a generic parameter for an expected context type.
  * Create a reusable middleware layer with a given expected context.
@@ -151,9 +118,9 @@ export const apiLayer = <T extends ApiLayer<{}>>(layer: T): T => layer;
  *
  * ```
  */
-export const apiLayerWithContext =
-  <ExpectedData extends {}>() =>
-  <T extends ApiLayer<ExpectedData>>(layer: T) =>
-    layer as unknown as (
-      ...args: Parameters<ApiLayer<ExpectedData>>
-    ) => ReturnType<T>;
+export declare const apiLayerWithContext: <ExpectedData extends {}>() => <T extends ApiLayer<ExpectedData, any>>(layer: T) => (context: {
+    req: NextApiRequest;
+    res: NextApiResponse<any>;
+    data: ExpectedData;
+}) => ReturnType<T>;
+export {};
